@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.chrome-*/
 
 # next.js
 /.next/

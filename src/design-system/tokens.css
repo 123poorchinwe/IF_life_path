@@ -1,0 +1,12 @@
+:root{
+  --bg-root:#0a1015;--bg-primary:#0f171e;--bg-secondary:#151f27;--bg-tertiary:#1b2831;--bg-elevated:#202e38;--bg-hover:#273843;--bg-active:#304551;
+  --paper-primary:#e8e1d4;--paper-secondary:#d4c9b7;--paper-muted:#b8ab96;--paper-line:#a1947e;
+  --text-primary:#eff3f5;--text-secondary:#b3bfc6;--text-tertiary:#84939c;--text-disabled:#596872;
+  --text-paper:#20282d;--text-paper-secondary:#4d575c;--text-paper-muted:#70797d;
+  --border-subtle:#26343d;--border-default:#374954;--border-strong:#526873;--border-focus:#88a0ac;
+  --status-open:#72a17e;--status-near:#c9a35e;--status-review:#6d91a7;--status-blocked:#a95f5c;--status-ai:#8878a3;--status-expiring:#cb7b52;
+  --sector-public:#986258;--sector-state:#4d7188;--sector-research:#756989;--sector-market:#4d7d72;--sector-transition:#a77753;
+  --font-serif:Georgia,"Noto Serif SC","Source Han Serif SC",serif;--font-sans:Arial,"Noto Sans SC","Source Han Sans SC",sans-serif;--font-mono:"IBM Plex Mono","JetBrains Mono",Consolas,monospace;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--space-16:64px;--space-20:80px;
+  --radius-xs:4px;--radius-sm:6px;--radius-md:8px;--radius-lg:10px;--radius-xl:12px;
+}
