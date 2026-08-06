@@ -119,6 +119,12 @@ function normalizeModelOutput(raw: unknown, ctx: Context) {
     (value) => value && typeof value === "object",
   ) as Record<string, unknown> | undefined;
   const value = nested || root;
+  const firstDialogueString = Object.entries(value).find(
+    ([key, candidate]) =>
+      typeof candidate === "string" &&
+      candidate.trim().length > 1 &&
+      !/memory|summary|摘要|策略|strategy/i.test(key),
+  )?.[1];
   return {
     line:
       value.line ||
@@ -126,7 +132,12 @@ function normalizeModelOutput(raw: unknown, ctx: Context) {
       value.content ||
       value.npcMessage ||
       value.npc_message ||
-      value["台词"],
+      value.npc_line ||
+      value.dialogue_line ||
+      value.reply ||
+      value["台词"] ||
+      value["NPC台词"] ||
+      firstDialogueString,
     memorySummary:
       value.memorySummary ||
       value.memory_summary ||
