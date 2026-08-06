@@ -156,6 +156,8 @@ AI_MODEL=Qwen/Qwen2.5-7B-Instruct
 SILICONFLOW_API_KEY=你的服务端API密钥
 ```
 
+如果Vercel中已有同名旧变量无法覆盖，可以改用带`1`的迁移变量：`AI_PROVIDER1`、`AI_BASE_URL1`、`AI_MODEL1`、`SILICONFLOW_API_KEY1`和`AI_MOCK_MODE1`。程序会优先读取它们。
+
 重新运行`npm run dev`。接口成功时，NPC对话会显示AI在线；密钥缺失、网络异常或模型输出校验失败时，系统会切换到本地回退，不阻断主要流程。
 
 ### 安全说明

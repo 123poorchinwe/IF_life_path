@@ -66,7 +66,8 @@ export async function GET() {
   return NextResponse.json(
     {
       configured: Boolean(provider.token),
-      mock: process.env.AI_MOCK_MODE === "true",
+      mock:
+        (process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE) === "true",
       provider: provider.provider,
       model: provider.model,
       ...getDialogueProviderHealth(),

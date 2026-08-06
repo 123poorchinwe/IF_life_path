@@ -33,19 +33,25 @@ let providerHealth: {
 } = { status: "unknown", checkedAt: 0 };
 export const getDialogueProviderHealth = () => providerHealth;
 export const getDialogueProviderConfig = () => {
-  const provider = (process.env.AI_PROVIDER || "modelscope").toLowerCase();
+  const provider = (
+    process.env.AI_PROVIDER1 ||
+    process.env.AI_PROVIDER ||
+    "modelscope"
+  ).toLowerCase();
   const siliconFlow = provider === "siliconflow";
   return {
     provider,
     token: siliconFlow
-      ? process.env.SILICONFLOW_API_KEY
+      ? process.env.SILICONFLOW_API_KEY1 || process.env.SILICONFLOW_API_KEY
       : process.env.MODELSCOPE_ACCESS_TOKEN,
     baseUrl:
+      process.env.AI_BASE_URL1 ||
       process.env.AI_BASE_URL ||
       (siliconFlow
         ? "https://api.siliconflow.cn/v1"
         : "https://api-inference.modelscope.cn/v1"),
     model:
+      process.env.AI_MODEL1 ||
       process.env.AI_MODEL ||
       (siliconFlow ? "Qwen/Qwen2.5-7B-Instruct" : "Qwen/Qwen3-4B"),
   };
@@ -112,7 +118,8 @@ export async function generateNPCDialogue(
 ): Promise<{ response: DialogueResponse; validationFailures: string[] }> {
   const provider = getDialogueProviderConfig(),
     token = provider.token;
-  if (!token || process.env.AI_MOCK_MODE === "true")
+  const mockMode = process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE;
+  if (!token || mockMode === "true")
     return { response: fallback(ctx, "mock"), validationFailures: [] };
   if (
     providerHealth.status === "offline" &&
