@@ -113,6 +113,37 @@ function extractJson(s: string) {
   if (a < 0 || b < a) throw new Error("invalid_json");
   return JSON.parse(t.slice(a, b + 1));
 }
+function normalizeModelOutput(raw: unknown, ctx: Context) {
+  const root = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const nested = [root.dialogue, root.response, root.result].find(
+    (value) => value && typeof value === "object",
+  ) as Record<string, unknown> | undefined;
+  const value = nested || root;
+  return {
+    line:
+      value.line ||
+      value.text ||
+      value.content ||
+      value.npcMessage ||
+      value.npc_message ||
+      value["台词"],
+    memorySummary:
+      value.memorySummary ||
+      value.memory_summary ||
+      value["记忆摘要"] ||
+      `玩家以${ctx.intent.type}方式回应；${ctx.npc.name}采取${ctx.decision.responseStrategy}策略。`,
+    revealedFactIds: Array.isArray(value.revealedFactIds)
+      ? value.revealedFactIds
+      : Array.isArray(value.revealed_fact_ids)
+        ? value.revealed_fact_ids
+        : [],
+    reactionTags: Array.isArray(value.reactionTags)
+      ? value.reactionTags
+      : Array.isArray(value.reaction_tags)
+        ? value.reaction_tags
+        : ctx.decision.reactionTags,
+  };
+}
 export async function generateNPCDialogue(
   ctx: Context,
 ): Promise<{ response: DialogueResponse; validationFailures: string[] }> {
@@ -134,7 +165,7 @@ export async function generateNPCDialogue(
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const controller = new AbortController(),
-        timer = setTimeout(() => controller.abort(), 7000);
+        timer = setTimeout(() => controller.abort(), 12_000);
       const system = `你只负责为策划定义的NPC写一句自然台词，不决定任务结果。角色定义=${JSON.stringify(ctx.npc)}。语言风格=${JSON.stringify(style)}。固定任务前提=${ctx.mission.immutablePremise}。禁止改写=${JSON.stringify(ctx.mission.forbiddenChanges)}。NPC决策器已决定=${JSON.stringify(ctx.decision)}。只能披露NPC已知事实，隐藏事实只有disclosureLevel>=2时才可披露。不得改变阵营、悔悟洗白、承诺不存在的奖励或宣布结局。输出JSON：line,memorySummary,revealedFactIds,reactionTags。`;
       const user = JSON.stringify({
         玩家输入: ctx.intent.rawText,
@@ -178,7 +209,10 @@ export async function generateNPCDialogue(
       }
       const raw = await res.json(),
         parsed = outputSchema.parse(
-          extractJson(raw.choices?.[0]?.message?.content || ""),
+          normalizeModelOutput(
+            extractJson(raw.choices?.[0]?.message?.content || ""),
+            ctx,
+          ),
         );
       const response: DialogueResponse = {
         npcId: ctx.npc.id,
