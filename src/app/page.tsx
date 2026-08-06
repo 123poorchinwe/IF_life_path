@@ -1127,14 +1127,35 @@ export default function HomePage() {
   useEffect(() => {
     const syncHash = () => {
       const hash = window.location.hash.slice(1) as ProductStep;
-      if (flow.includes(hash)) setStep(hash);
+      if (flow.includes(hash)) {
+        setStep(hash);
+        localStorage.setItem("if-life-path-current-step", hash);
+        return;
+      }
+      const savedStep = localStorage.getItem(
+        "if-life-path-current-step",
+      ) as ProductStep | null;
+      if (savedStep && flow.includes(savedStep) && savedStep !== "home") {
+        setStep(savedStep);
+        window.history.replaceState(null, "", `#${savedStep}`);
+      }
     };
+    const savedRecords = localStorage.getItem("if-life-path-decisions-v1");
+    if (savedRecords) {
+      try {
+        setRecords(JSON.parse(savedRecords));
+      } catch {}
+    }
     window.addEventListener("hashchange", syncHash);
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
+  useEffect(() => {
+    localStorage.setItem("if-life-path-decisions-v1", JSON.stringify(records));
+  }, [records]);
   const go = (s: ProductStep) => {
     setStep(s);
+    localStorage.setItem("if-life-path-current-step", s);
     window.history.replaceState(
       null,
       "",

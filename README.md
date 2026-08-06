@@ -220,3 +220,7 @@ SILICONFLOW_API_KEY=你的服务端API密钥
 - AI服务不可用时启用本地回退，规则层与主要流程仍可运行。
 
 部署到托管平台时，需要在服务端设置`.env.example`中列出的环境变量。真实Token只能保存在托管平台的加密环境变量中，不能提交到GitHub。
+
+## CloudBase存档（准备中）
+
+国内版使用上海地域CloudBase环境保存账号与游戏进度。浏览器端只允许配置`NEXT_PUBLIC_CLOUDBASE_PUBLISHABLE_KEY`，禁止把service role或管理员API Key写入仓库。接入云同步前，需要在CloudBase控制台添加站点安全来源域名，并为存档集合配置按用户隔离的安全规则。未完成云端配置时，当前页面、规则状态和任务对话仍会自动保存在浏览器本地。
