@@ -32,14 +32,29 @@ const requestSchema = z.object({
     .default([]),
   memorySummary: z.string().max(1000).default(""),
 });
-const corsHeaders = {
-  "Access-Control-Allow-Origin":
-    process.env.CORS_ALLOWED_ORIGIN ||
-    "https://123poorchinwe.github.io",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  Vary: "Origin",
-};
+const defaultOrigins = [
+  "https://123poorchinwe.github.io",
+  "https://game-d7g6sf32s7b58cbcd-1464556999.tcloudbaseapp.com",
+];
+function corsHeaders(req?: Request) {
+  const origin = req?.headers.get("origin") || "";
+  const configured = (process.env.CORS_ALLOWED_ORIGIN || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const allowed = new Set([...defaultOrigins, ...configured]);
+  const accepted =
+    allowed.has(origin) ||
+    /^https:\/\/[a-z0-9-]+\.tcloudbaseapp\.com$/i.test(origin);
+  return {
+    "Access-Control-Allow-Origin": accepted
+      ? origin
+      : defaultOrigins[0],
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    Vary: "Origin",
+  };
+}
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(req: Request) {
@@ -57,11 +72,11 @@ function isRateLimited(req: Request) {
   return current.count > limit;
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const provider = getDialogueProviderConfig();
   return NextResponse.json(
     {
@@ -72,15 +87,16 @@ export async function GET() {
       model: provider.model,
       ...getDialogueProviderHealth(),
     },
-    { headers: corsHeaders },
+    { headers: corsHeaders(req) },
   );
 }
 export async function POST(req: Request) {
+  const headers = corsHeaders(req);
   try {
     if (isRateLimited(req))
       return NextResponse.json(
         { error: "rate_limit_exceeded" },
-        { status: 429, headers: corsHeaders },
+        { status: 429, headers },
       );
     const body = requestSchema.parse(await req.json()),
       npc = npcById[body.npcId],
@@ -88,7 +104,7 @@ export async function POST(req: Request) {
     if (!npc || !mission || !mission.npcIds.includes(npc.id))
       return NextResponse.json(
         { error: "invalid_narrative_binding" },
-        { status: 400, headers: corsHeaders },
+        { status: 400, headers },
       );
     if (
       body.missionState.missionId !== mission.id ||
@@ -96,7 +112,7 @@ export async function POST(req: Request) {
     )
       return NextResponse.json(
         { error: "state_identity_mismatch" },
-        { status: 400, headers: corsHeaders },
+        { status: 400, headers },
       );
     const intent = parseDialogueIntent(body.message),
       decision = decideNPC(
@@ -140,7 +156,7 @@ export async function POST(req: Request) {
         ),
         validationFailures: generated.validationFailures,
       },
-      { headers: corsHeaders },
+      { headers },
     );
   } catch (error) {
     console.error(
@@ -149,7 +165,7 @@ export async function POST(req: Request) {
     );
     return NextResponse.json(
       { error: "narrative_pipeline_failed" },
-      { status: 500, headers: corsHeaders },
+      { status: 500, headers },
     );
   }
 }
