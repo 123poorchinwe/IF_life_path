@@ -21,6 +21,7 @@ import {
 } from "@/data/missions";
 import { npcById } from "@/data/npcs";
 import { useGameStore } from "@/store/game";
+import { getDialogueEndpoint } from "@/ai/dialogue-endpoint";
 import {
   DialogueResponse,
   MissionRuntimeState,
@@ -124,11 +125,22 @@ export default function MissionSimulation({
     model: "",
     status: "unknown",
   });
-  const refreshProvider = () =>
-    fetch("/api/dialogue")
+  const refreshProvider = () => {
+    const endpoint = getDialogueEndpoint();
+    if (!endpoint) {
+      return Promise.resolve().then(() =>
+        setProvider((current) => ({
+          ...current,
+          configured: false,
+          status: "offline",
+        })),
+      );
+    }
+    return fetch(endpoint)
       .then((r) => r.json())
       .then(setProvider)
       .catch(() => setProvider((p) => ({ ...p, status: "offline" as const })));
+  };
   useEffect(() => {
     void refreshProvider();
   }, []);
@@ -187,7 +199,9 @@ export default function MissionSimulation({
     setInput("");
     setLoading(true);
     try {
-      const res = await fetch("/api/dialogue", {
+      const endpoint = getDialogueEndpoint();
+      if (!endpoint) throw new Error("dialogue_api_not_configured");
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

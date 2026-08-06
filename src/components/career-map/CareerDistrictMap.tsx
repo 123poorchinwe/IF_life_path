@@ -18,6 +18,7 @@ import PhaserCareerWorld, {
   WorldPlace,
 } from "./PhaserCareerWorld";
 import { useGameStore } from "@/store/game";
+import { getDialogueEndpoint } from "@/ai/dialogue-endpoint";
 
 const districts = [
   {
@@ -165,7 +166,9 @@ function Interior({
     setInput("");
     setLoading(true);
     try {
-      const r = await fetch("/api/dialogue", {
+      const endpoint = getDialogueEndpoint();
+      if (!endpoint) throw new Error("dialogue_api_not_configured");
+      const r = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

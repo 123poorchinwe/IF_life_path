@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type PhaserType from "phaser";
+import { withPublicBasePath } from "@/ai/dialogue-endpoint";
 
 export type WorldPlace = {
   id: string;
@@ -65,7 +66,10 @@ export default function PhaserCareerWorld({
         lastHint = "";
 
         preload() {
-          this.load.image("career-town", "/assets/pixel/career-town-v1.webp");
+          this.load.image(
+            "career-town",
+            withPublicBasePath("/assets/pixel/career-town-v1.webp"),
+          );
         }
 
         makePerson(key: string, shirt: number, walking = false) {
