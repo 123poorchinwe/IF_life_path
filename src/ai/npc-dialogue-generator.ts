@@ -113,6 +113,22 @@ function extractJson(s: string) {
   if (a < 0 || b < a) throw new Error("invalid_json");
   return JSON.parse(t.slice(a, b + 1));
 }
+function findDialogueString(value: unknown, depth = 0): string | undefined {
+  if (depth > 4 || !value || typeof value !== "object") return undefined;
+  const entries = Object.entries(value as Record<string, unknown>);
+  const preferred = entries.find(
+    ([key, candidate]) =>
+      typeof candidate === "string" &&
+      /line|text|content|reply|dialogue|message|台词|回复|对话/i.test(key) &&
+      !/memory|summary|摘要/i.test(key),
+  )?.[1];
+  if (typeof preferred === "string" && preferred.trim()) return preferred;
+  for (const [, candidate] of entries) {
+    const found = findDialogueString(candidate, depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
 function normalizeModelOutput(raw: unknown, ctx: Context) {
   const root = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const nested = [root.dialogue, root.response, root.result].find(
@@ -137,7 +153,8 @@ function normalizeModelOutput(raw: unknown, ctx: Context) {
       value.reply ||
       value["台词"] ||
       value["NPC台词"] ||
-      firstDialogueString,
+      firstDialogueString ||
+      findDialogueString(raw),
     memorySummary:
       value.memorySummary ||
       value.memory_summary ||
