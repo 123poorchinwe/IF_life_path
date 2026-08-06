@@ -39,7 +39,7 @@
 - 40个结构化事件骨架；
 - 六阶段时间与资源状态；
 - 能力迁移和职业结论页面；
-- ModelScope对话接口与本地回退；
+- 硅基流动/ModelScope兼容对话接口与本地回退；
 - 桌面端和移动端响应式布局。
 
 ## 职业门状态
@@ -90,7 +90,7 @@ AI负责实时生成自然语言，但必须遵守人物设定。NPC可以犹豫
 - Zustand
 - Zod
 - React Flow
-- ModelScope兼容的OpenAI风格接口
+- 硅基流动与ModelScope兼容的OpenAI风格接口
 
 ## 项目结构
 
@@ -150,10 +150,10 @@ Copy-Item .env.example .env.local
 在`.env.local`中配置：
 
 ```env
-AI_PROVIDER=modelscope
-AI_BASE_URL=https://api-inference.modelscope.cn/v1
-AI_MODEL=Qwen/Qwen2.5-72B-Instruct
-MODELSCOPE_ACCESS_TOKEN=你的服务端Token
+AI_PROVIDER=siliconflow
+AI_BASE_URL=https://api.siliconflow.cn/v1
+AI_MODEL=Qwen/Qwen2.5-7B-Instruct
+SILICONFLOW_API_KEY=你的服务端API密钥
 ```
 
 重新运行`npm run dev`。接口成功时，NPC对话会显示AI在线；密钥缺失、网络异常或模型输出校验失败时，系统会切换到本地回退，不阻断主要流程。
@@ -178,7 +178,7 @@ MODELSCOPE_ACCESS_TOKEN=你的服务端Token
 
 ## 当前限制
 
-- ModelScope在部分网络环境下可能出现连接重置或超时；
+- 免费模型存在固定速率限制；达到上限或请求异常时会自动使用本地回退；
 - 像素人物仍使用程序生成的临时精灵，尚未接入正式四方向Sprite Sheet；
 - 地图碰撞区域目前为手工配置，尚未使用Tiled瓦片碰撞层；
 - NPC巡逻已接入Phaser，但完整日程和长期记忆仍在开发；

@@ -11,6 +11,7 @@ import {
 } from "@/engine/mission-state-machine";
 import {
   generateNPCDialogue,
+  getDialogueProviderConfig,
   getDialogueProviderHealth,
 } from "@/ai/npc-dialogue-generator";
 import { MissionRuntimeState, NPCRelationshipState } from "@/types/narrative";
@@ -61,11 +62,13 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
+  const provider = getDialogueProviderConfig();
   return NextResponse.json(
     {
-      configured: Boolean(process.env.MODELSCOPE_ACCESS_TOKEN),
+      configured: Boolean(provider.token),
       mock: process.env.AI_MOCK_MODE === "true",
-      model: process.env.AI_MODEL || "Qwen/Qwen3-4B",
+      provider: provider.provider,
+      model: provider.model,
       ...getDialogueProviderHealth(),
     },
     { headers: corsHeaders },

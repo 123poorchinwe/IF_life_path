@@ -32,6 +32,24 @@ let providerHealth: {
   error?: string;
 } = { status: "unknown", checkedAt: 0 };
 export const getDialogueProviderHealth = () => providerHealth;
+export const getDialogueProviderConfig = () => {
+  const provider = (process.env.AI_PROVIDER || "modelscope").toLowerCase();
+  const siliconFlow = provider === "siliconflow";
+  return {
+    provider,
+    token: siliconFlow
+      ? process.env.SILICONFLOW_API_KEY
+      : process.env.MODELSCOPE_ACCESS_TOKEN,
+    baseUrl:
+      process.env.AI_BASE_URL ||
+      (siliconFlow
+        ? "https://api.siliconflow.cn/v1"
+        : "https://api-inference.modelscope.cn/v1"),
+    model:
+      process.env.AI_MODEL ||
+      (siliconFlow ? "Qwen/Qwen2.5-7B-Instruct" : "Qwen/Qwen3-4B"),
+  };
+};
 const localLines: Record<NPCDecision["responseStrategy"], string[]> = {
   inform: [
     "我可以说我亲眼见过的部分，但别把它当成全部情况。",
@@ -92,7 +110,8 @@ function extractJson(s: string) {
 export async function generateNPCDialogue(
   ctx: Context,
 ): Promise<{ response: DialogueResponse; validationFailures: string[] }> {
-  const token = process.env.MODELSCOPE_ACCESS_TOKEN;
+  const provider = getDialogueProviderConfig(),
+    token = provider.token;
   if (!token || process.env.AI_MOCK_MODE === "true")
     return { response: fallback(ctx, "mock"), validationFailures: [] };
   if (
@@ -121,9 +140,7 @@ export async function generateNPCDialogue(
         最近对话: ctx.history.slice(-10),
         上次失败原因: failures,
       });
-      const base = (
-        process.env.AI_BASE_URL || "https://api-inference.modelscope.cn/v1"
-      ).replace(/\/$/, "");
+      const base = provider.baseUrl.replace(/\/$/, "");
       const res = await fetch(`${base}/chat/completions`, {
         method: "POST",
         signal: controller.signal,
@@ -132,7 +149,7 @@ export async function generateNPCDialogue(
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          model: process.env.AI_MODEL || "Qwen/Qwen3-4B",
+          model: provider.model,
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
@@ -143,7 +160,15 @@ export async function generateNPCDialogue(
         }),
       });
       clearTimeout(timer);
-      if (!res.ok) throw new Error(`provider_${res.status}`);
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 240);
+        console.error("Dialogue provider rejected request", {
+          provider: provider.provider,
+          status: res.status,
+          detail,
+        });
+        throw new Error(`provider_${res.status}`);
+      }
       const raw = await res.json(),
         parsed = outputSchema.parse(
           extractJson(raw.choices?.[0]?.message?.content || ""),
