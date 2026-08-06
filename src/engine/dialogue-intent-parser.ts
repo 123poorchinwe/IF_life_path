@@ -1,0 +1,5 @@
+import {DialogueIntentType,PlayerDialogueIntent} from "@/types/narrative";
+const rules:[DialogueIntentType,RegExp][]=[
+["exit_relationship",/不聊了|结束合作|别联系|退出|离开/],["threaten",/曝光|举报|告你|后果|威胁/],["refuse_request",/拒绝|不接受|不会做|不同意|不买/],["document_evidence",/记录|录音|截图|邮件|书面|纪要|留证/],["expose_inconsistency",/矛盾|前后不一|刚才.*现在|说法不一致/],["confirm_credit",/署名|成果归属|贡献|作者|credit/i],["negotiate_scope",/范围|分工|截止|延期|工作量|谈条件/],["verify_claim",/证据|证明|合同|官方|怎么核实|真的吗/],["delay_decision",/考虑|晚点|暂时|之后决定|先不/],["seek_alliance",/帮我|一起|支持我|介绍|联盟/],["seek_empathy",/难受|焦虑|害怕|压力|来不及|理解我/],["flatter",/厉害|佩服|专业|相信你|只有你/],["accept_condition",/接受|同意|可以做|签|付款|就这样/],["ask_information",/什么|怎么|为什么|多少|是否|吗|请问|告诉我/]
+];
+export function parseDialogueIntent(rawText:string):PlayerDialogueIntent{const normalized=rawText.trim();const found=rules.find(([,r])=>r.test(normalized));return{type:found?.[0]||"unknown",confidence:found?.[0]?Math.min(.95,.62+normalized.length/100):.35,rawText:normalized,evidenceRefs:[...normalized.matchAll(/\[(.*?)\]/g)].map(m=>m[1]),claim:normalized.includes("你说")?normalized:undefined}}
