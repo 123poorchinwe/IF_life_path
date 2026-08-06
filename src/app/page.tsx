@@ -1,6 +1,6 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BrainCircuit,
@@ -32,6 +32,7 @@ import dynamic from "next/dynamic";
 import { Button, Panel, Tag, TextArea } from "@/components/ui";
 import { events, profileCards, transferItems } from "@/data/mock";
 import type { ProductStep, ProfileMode, DecisionRecord } from "@/types/product";
+import type { ParsedProfile, ProfileCard } from "@/types/profile";
 import MissionSimulation from "@/components/scenario/MissionSimulation";
 
 const CareerNetwork = dynamic(
@@ -276,14 +277,45 @@ function NetworkPreview() {
 }
 
 function Onboarding({
-  next,
+  submitProfile,
   preset,
 }: {
-  next: () => void;
+  submitProfile: (input: { text?: string; file?: File }) => Promise<void>;
   preset: () => void;
 }) {
   const [mode, setMode] = useState<ProfileMode>("text"),
-    [text, setText] = useState("");
+    [text, setText] = useState(""),
+    [structured, setStructured] = useState<Record<string, string>>({
+      专业: "",
+      学历: "",
+      毕业时间: "",
+      当前城市: "",
+      技能: "",
+      项目与实习: "",
+      当前选择: "",
+      现实限制: "",
+    }),
+    [file, setFile] = useState<File | null>(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const submit = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await submitProfile(
+        mode === "upload"
+          ? { file: file || undefined }
+          : mode === "structured"
+            ? { text: Object.entries(structured).map(([key, value]) => `${key}：${value || "未填写"}`).join("\n") }
+            : { text },
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "简历解析失败，请稍后重试");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <main className="content-page onboarding">
       <PageHeader
@@ -294,6 +326,7 @@ function Onboarding({
       <div className="mode-switch" role="tablist">
         {[
           ["text", FileText, "粘贴经历", "简历、自我介绍或当前困惑"],
+          ["upload", Upload, "上传简历", "支持 PDF、DOCX、TXT，最大 5MB"],
           ["structured", PenLine, "结构化填写", "按专业、项目和限制逐项填写"],
           ["preset", Users, "预设试玩", "使用完整示例快速体验"],
         ].map(([id, I, t, d]) => (
@@ -342,7 +375,28 @@ function Onboarding({
           </div>
         </Panel>
       )}
-      {mode === "structured" && <StructuredForm />}
+      {mode === "upload" && (
+        <Panel className="resume-upload-panel">
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={(event) => {
+              setError("");
+              setFile(event.target.files?.[0] || null);
+            }}
+          />
+          <button type="button" className={file ? "has-file" : ""} onClick={() => fileInput.current?.click()}>
+            {file ? <FileCheck2 /> : <Upload />}
+            <span>
+              <b>{file ? file.name : "选择一份简历"}</b>
+              <small>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 点击可重新选择` : "PDF、DOCX 或 TXT · 不超过 5MB"}</small>
+            </span>
+          </button>
+          <p><ShieldCheck />文件只用于提取职业档案；请先删除身份证号、手机号、住址等敏感信息。</p>
+        </Panel>
+      )}
+      {mode === "structured" && <StructuredForm values={structured} onChange={(key, value) => setStructured((current) => ({ ...current, [key]: value }))} />}
       {mode === "preset" && (
         <div className="preset-list">
           {[
@@ -368,33 +422,27 @@ function Onboarding({
       <div className="page-action">
         <span>
           <Info />
-          输入内容仅用于本次职业路径生成
+          {error || "输入内容仅用于本次职业路径生成"}
         </span>
         <Button
-          disabled={mode === "text" && text.length < 20}
-          onClick={mode === "preset" ? preset : next}
+          disabled={busy || (mode === "text" && text.length < 20) || (mode === "upload" && !file) || (mode === "structured" && !structured.专业 && !structured.项目与实习)}
+          onClick={mode === "preset" ? preset : submit}
         >
-          {mode === "preset" ? "使用选中档案" : "开始解析经历"}
+          {mode === "preset" ? "使用选中档案" : busy ? "正在读取并解析…" : "开始解析经历"}
           <ArrowRight />
         </Button>
       </div>
     </main>
   );
 }
-function StructuredForm() {
+function StructuredForm({ values, onChange }: { values: Record<string, string>; onChange: (key: string, value: string) => void }) {
+  const fields = ["专业", "学历", "毕业时间", "当前城市", "技能", "项目与实习", "当前选择", "现实限制"];
   return (
     <Panel className="structured-form">
-      {[
-        ["专业", "地理信息系统"],
-        ["学历", "硕士研究生"],
-        ["毕业时间", "2027 年 6 月"],
-        ["当前城市", "杭州"],
-        ["技能", "Python、ArcGIS、空间分析"],
-        ["当前选择", "企业、国企、读博、考公"],
-      ].map((x) => (
-        <label key={x[0]}>
-          <span>{x[0]}</span>
-          <input defaultValue={x[1]} />
+      {fields.map((field) => (
+        <label key={field}>
+          <span>{field}</span>
+          <input value={values[field] || ""} onChange={(event) => onChange(field, event.target.value)} placeholder={`填写${field}`} />
         </label>
       ))}
     </Panel>
@@ -473,9 +521,8 @@ function Parsing({ done }: { done: () => void }) {
   );
 }
 
-function Review({ next }: { next: () => void }) {
-  const [cards, setCards] = useState(profileCards);
-  const groups = ["事实", "推断", "资格", "限制", "偏好"];
+function Review({ next, cards, setCards }: { next: () => void; cards: ProfileCard[]; setCards: React.Dispatch<React.SetStateAction<ProfileCard[]>> }) {
+  const groups: ProfileCard["type"][] = ["事实", "能力", "推断", "资格", "限制", "偏好"];
   return (
     <main className="content-page review-page">
       <PageHeader
@@ -550,7 +597,7 @@ function Review({ next }: { next: () => void }) {
                           <PenLine />
                           编辑
                         </button>
-                        <button aria-label="删除">
+                        <button aria-label="删除" onClick={() => setCards((value) => value.filter((item) => item.id !== c.id))}>
                           <Trash2 />
                         </button>
                       </footer>
@@ -1123,7 +1170,13 @@ function StickyAction({
 
 export default function HomePage() {
   const [step, setStep] = useState<ProductStep>("home"),
-    [records, setRecords] = useState<DecisionRecord[]>([]);
+    [records, setRecords] = useState<DecisionRecord[]>([]),
+    [parsedProfile, setParsedProfile] = useState<ParsedProfile>({
+      cards: profileCards as ProfileCard[],
+      sourceText: "",
+      sourceName: "GIS 硕士预设档案",
+      usedAI: false,
+    });
   useEffect(() => {
     const syncHash = () => {
       const hash = window.location.hash.slice(1) as ProductStep;
@@ -1146,6 +1199,12 @@ export default function HomePage() {
         setRecords(JSON.parse(savedRecords));
       } catch {}
     }
+    const savedProfile = localStorage.getItem("if-life-path-profile-v1");
+    if (savedProfile) {
+      try {
+        setParsedProfile(JSON.parse(savedProfile));
+      } catch {}
+    }
     window.addEventListener("hashchange", syncHash);
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     return () => window.removeEventListener("hashchange", syncHash);
@@ -1153,6 +1212,9 @@ export default function HomePage() {
   useEffect(() => {
     localStorage.setItem("if-life-path-decisions-v1", JSON.stringify(records));
   }, [records]);
+  useEffect(() => {
+    localStorage.setItem("if-life-path-profile-v1", JSON.stringify(parsedProfile));
+  }, [parsedProfile]);
   const go = (s: ProductStep) => {
     setStep(s);
     localStorage.setItem("if-life-path-current-step", s);
@@ -1163,7 +1225,29 @@ export default function HomePage() {
     );
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const preset = () => go("parsing");
+  const preset = () => {
+    setParsedProfile({ cards: profileCards as ProfileCard[], sourceText: "", sourceName: "GIS 硕士预设档案", usedAI: false });
+    go("parsing");
+  };
+  const submitProfile = async ({ text, file }: { text?: string; file?: File }) => {
+    const configured = process.env.NEXT_PUBLIC_PROFILE_API_URL;
+    const dialogue = process.env.NEXT_PUBLIC_DIALOGUE_API_URL;
+    const endpoint = configured || (dialogue ? dialogue.replace(/\/dialogue\/?$/, "/profile/parse") : "/api/profile/parse");
+    const response = file
+      ? await fetch(endpoint, { method: "POST", body: (() => { const form = new FormData(); form.append("file", file); return form; })() })
+      : await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const payload = await response.json();
+    if (!response.ok) {
+      const messages: Record<string, string> = {
+        file_too_large: "文件超过 5MB，请压缩后重试",
+        unsupported_file_type: "暂时只支持 PDF、DOCX 和 TXT",
+        insufficient_text: "没有读取到足够文字，请换一份可复制文字的简历",
+      };
+      throw new Error(messages[payload.error] || "解析服务暂时不可用，请稍后重试");
+    }
+    setParsedProfile(payload as ParsedProfile);
+    go("parsing");
+  };
   return (
     <div className="product">
       <TopBar step={step} go={go} />
@@ -1172,10 +1256,10 @@ export default function HomePage() {
           <Home start={() => go("onboarding")} preset={preset} />
         )}{" "}
         {step === "onboarding" && (
-          <Onboarding next={() => go("parsing")} preset={preset} />
+          <Onboarding submitProfile={submitProfile} preset={preset} />
         )}{" "}
         {step === "parsing" && <Parsing done={() => go("review")} />}{" "}
-        {step === "review" && <Review next={() => go("map")} />}{" "}
+        {step === "review" && <Review next={() => go("map")} cards={parsedProfile.cards} setCards={(cards) => setParsedProfile((profile) => ({ ...profile, cards: typeof cards === "function" ? cards(profile.cards) : cards }))} />}{" "}
         {step === "map" && <CareerNetwork onEnter={() => go("simulation")} />}{" "}
         {step === "simulation" && (
           <MissionSimulation
