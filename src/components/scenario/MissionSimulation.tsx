@@ -67,8 +67,9 @@ function withWorldEvidence(
 type ProviderStatus = {
   configured: boolean;
   mock: boolean;
+  provider?: string;
   model: string;
-  status: "unknown" | "online" | "offline";
+  status: "unknown" | "ready" | "online" | "degraded" | "offline";
 };
 const openingLine = (npcId: string, missionId: string) =>
   missionId === "scope_and_credit"
@@ -138,7 +139,15 @@ export default function MissionSimulation({
     }
     return fetch(endpoint)
       .then((r) => r.json())
-      .then(setProvider)
+      .then((data: ProviderStatus) =>
+        setProvider({
+          ...data,
+          status:
+            data.configured && data.status === "unknown"
+              ? "ready"
+              : data.status,
+        }),
+      )
       .catch(() => setProvider((p) => ({ ...p, status: "offline" as const })));
   };
   useEffect(() => {
@@ -222,7 +231,7 @@ export default function MissionSimulation({
       setMemory(data.dialogue.memorySummary);
       setProvider((p) => ({
         ...p,
-        status: data.dialogue.mode === "ai" ? "online" : "offline",
+        status: data.dialogue.mode === "ai" ? "online" : "degraded",
       }));
       setMessages((v) => [...v, { speaker: "npc", text: data.dialogue.line }]);
     } catch {
@@ -355,16 +364,25 @@ export default function MissionSimulation({
             </span>
             <Tag
               tone={
-                provider.status === "online"
+                provider.status === "online" || provider.status === "ready"
                   ? "open"
-                  : provider.status === "offline"
+                  : provider.status === "offline" ||
+                      provider.status === "degraded"
                     ? "blocked"
                     : "review"
               }
             >
-              {provider.status === "online" ? <Wifi /> : <WifiOff />}
+              {provider.status === "online" || provider.status === "ready" ? (
+                <Wifi />
+              ) : (
+                <WifiOff />
+              )}
               {provider.status === "online"
                 ? `AI在线 · ${provider.model}`
+                : provider.status === "ready"
+                  ? `AI已配置 · ${provider.provider || provider.model}`
+                  : provider.status === "degraded"
+                    ? "AI响应异常 · 本地接管"
                 : provider.status === "offline"
                   ? "模型不可达 · 本地演出"
                   : provider.configured
