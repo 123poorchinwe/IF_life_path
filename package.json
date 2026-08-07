@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "build:pages": "node scripts/build-pages.mjs",
+    "build:cloudbase": "node scripts/build-cloudbase-function.mjs",
+    "deploy:cloudbase": "npm run build:cloudbase && tcb fn deploy if-life-api --httpFn -e game-d7g6sf32s7b58cbcd --dir dist/cloudbase-function --path /if-life-api --force --yes --deployMode zip",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit"
@@ -28,6 +30,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",

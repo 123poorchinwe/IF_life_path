@@ -1230,9 +1230,16 @@ export default function HomePage() {
     go("parsing");
   };
   const submitProfile = async ({ text, file }: { text?: string; file?: File }) => {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
     const configured = process.env.NEXT_PUBLIC_PROFILE_API_URL;
     const dialogue = process.env.NEXT_PUBLIC_DIALOGUE_API_URL;
-    const endpoint = configured || (dialogue ? dialogue.replace(/\/dialogue\/?$/, "/profile/parse") : "/api/profile/parse");
+    const endpoint = apiBase
+      ? `${apiBase.replace(/\/$/, "")}/api/profile/parse`
+      : configured || (dialogue
+        ? dialogue.replace(/\/dialogue\/?$/, "/profile/parse")
+        : process.env.NEXT_PUBLIC_STATIC_EXPORT === "true"
+          ? "https://game-d7g6sf32s7b58cbcd-1464556999.ap-shanghai.app.tcloudbase.com/if-life-api/api/profile/parse"
+          : "/api/profile/parse");
     const response = file
       ? await fetch(endpoint, { method: "POST", body: (() => { const form = new FormData(); form.append("file", file); return form; })() })
       : await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });

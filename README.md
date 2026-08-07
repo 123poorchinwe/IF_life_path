@@ -224,6 +224,10 @@ SILICONFLOW_API_KEY=你的服务端API密钥
 
 腾讯云静态前端可通过`NEXT_PUBLIC_PROFILE_API_URL`指定简历解析接口；未单独设置时，客户端会根据`NEXT_PUBLIC_DIALOGUE_API_URL`自动使用同一Vercel项目下的`/api/profile/parse`。上传文件限制为5MB，仅支持PDF、DOCX和TXT。原始文件不落盘，服务端提取文本并返回结构化档案卡。
 
+### 腾讯云单云部署
+
+推荐生产架构为CloudBase静态托管加CloudBase HTTP云函数。执行`npm run build:cloudbase`会在`dist/cloudbase-function`生成轻量化Node.js函数包；登录CloudBase CLI后可执行`npm run deploy:cloudbase`部署`if-life-api`函数。函数必须在控制台设置服务端模型密钥（ModelScope使用`MODELSCOPE_ACCESS_TOKEN`，硅基流动使用`SILICONFLOW_API_KEY1`），不得写入仓库。获得函数公网地址后，在静态网站构建环境中设置`NEXT_PUBLIC_API_BASE_URL`，前端会自动调用该地址下的`/api/dialogue`和`/api/profile/parse`，不再依赖Vercel。
+
 ## CloudBase存档（准备中）
 
 国内版使用上海地域CloudBase环境保存账号与游戏进度。浏览器端只允许配置`NEXT_PUBLIC_CLOUDBASE_PUBLISHABLE_KEY`，禁止把service role或管理员API Key写入仓库。接入云同步前，需要在CloudBase控制台添加站点安全来源域名，并为存档集合配置按用户隔离的安全规则。未完成云端配置时，当前页面、规则状态和任务对话仍会自动保存在浏览器本地。

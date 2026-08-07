@@ -1,0 +1,21 @@
+{
+  "envId": "game-d7g6sf32s7b58cbcd",
+  "functionRoot": "./dist",
+  "functions": [
+    {
+      "name": "if-life-api",
+      "dir": "./cloudbase-function",
+      "runtime": "Nodejs20.19",
+      "type": "HTTP",
+      "timeout": 30,
+      "memorySize": 512,
+      "envVariables": {
+        "AI_PROVIDER1": "modelscope",
+        "AI_BASE_URL1": "https://api-inference.modelscope.cn/v1",
+        "AI_MODEL1": "Qwen/Qwen3-4B",
+        "AI_MOCK_MODE1": "false",
+        "AI_RATE_LIMIT_PER_MINUTE": "20"
+      }
+    }
+  ]
+}
