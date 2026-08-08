@@ -69,7 +69,13 @@ type ProviderStatus = {
   mock: boolean;
   provider?: string;
   model: string;
-  status: "unknown" | "ready" | "online" | "degraded" | "offline";
+  status:
+    | "checking"
+    | "unknown"
+    | "ready"
+    | "online"
+    | "degraded"
+    | "offline";
 };
 const openingLine = (npcId: string, missionId: string) =>
   missionId === "scope_and_credit"
@@ -124,31 +130,35 @@ export default function MissionSimulation({
     configured: false,
     mock: false,
     model: "",
-    status: "unknown",
+    status: "checking",
   });
-  const refreshProvider = () => {
+  const refreshProvider = async () => {
     const endpoint = getDialogueEndpoint();
     if (!endpoint) {
-      return Promise.resolve().then(() =>
-        setProvider((current) => ({
-          ...current,
-          configured: false,
-          status: "offline",
-        })),
-      );
+      setProvider((current) => ({ ...current, status: "offline" }));
+      return;
     }
-    return fetch(endpoint)
-      .then((r) => r.json())
-      .then((data: ProviderStatus) =>
+    setProvider((current) => ({ ...current, status: "checking" }));
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(endpoint, { cache: "no-store" });
+        if (!response.ok) throw new Error(`provider_health_${response.status}`);
+        const data = (await response.json()) as ProviderStatus;
         setProvider({
           ...data,
           status:
             data.configured && data.status === "unknown"
               ? "ready"
               : data.status,
-        }),
-      )
-      .catch(() => setProvider((p) => ({ ...p, status: "offline" as const })));
+        });
+        return;
+      } catch {
+        if (attempt < 2) {
+          await new Promise((resolve) => window.setTimeout(resolve, 800 * (attempt + 1)));
+        }
+      }
+    }
+    setProvider((current) => ({ ...current, status: "offline" }));
   };
   useEffect(() => {
     void refreshProvider();
@@ -372,12 +382,16 @@ export default function MissionSimulation({
                     : "review"
               }
             >
-              {provider.status === "online" || provider.status === "ready" ? (
+              {provider.status === "checking" ? (
+                <Bot />
+              ) : provider.status === "online" || provider.status === "ready" ? (
                 <Wifi />
               ) : (
                 <WifiOff />
               )}
-              {provider.status === "online"
+              {provider.status === "checking"
+                ? "正在检测模型…"
+                : provider.status === "online"
                 ? `AI在线 · ${provider.model}`
                 : provider.status === "ready"
                   ? `AI已配置 · ${provider.provider || provider.model}`
