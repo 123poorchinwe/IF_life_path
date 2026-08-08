@@ -93,6 +93,10 @@ const nodeTypes = { career: CareerNode };
 function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
   const missionOutcomes = useGameStore((s) => s.missionOutcomes);
   const worldEvidence = useGameStore((s) => s.worldEvidence);
+  const profileCards = useGameStore((s) => s.profileCards || []);
+  const confirmedCards = profileCards.filter((card) => card.confirmed);
+  const abilityCards = confirmedCards.filter((card) => card.type === "能力");
+  const constraintCards = confirmedCards.filter((card) => card.type === "限制");
   const completedMissionCount = Object.keys(missionOutcomes).length;
   const [selectedId, setSelectedId] = useState("gis-dev"),
     [sector, setSector] = useState("全部"),
@@ -134,7 +138,7 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
         position: { x: 20, y: 305 },
         data: {
           label: "GIS 硕士 · 2027",
-          sector: "7 项能力证据",
+          sector: `${confirmedCards.length} 项已确认档案证据`,
           status: "已开放",
           gaps: 0,
           confidence: "已确认",
@@ -234,7 +238,7 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
       })),
     ];
     return { nodes: ns, edges: es };
-  }, [sector, excluded]);
+  }, [sector, excluded, confirmedCards.length]);
   return (
     <div className="network-shell">
       <aside className="network-profile">
@@ -253,17 +257,18 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
           </div>
           <div>
             <dt>技能证据</dt>
-            <dd>7 项</dd>
+            <dd>{abilityCards.length} 项</dd>
           </div>
           <div>
             <dt>当前限制</dt>
-            <dd>3 项</dd>
+            <dd>{constraintCards.length} 项</dd>
           </div>
         </dl>
         <h4>重点能力</h4>
-        {["Python", "空间分析", "路网建模", "英文汇报"].map((x) => (
-          <Tag key={x}>{x}</Tag>
-        ))}
+        {(abilityCards.length
+          ? abilityCards.slice(0, 6).map((card) => card.title)
+          : ["尚未确认能力证据"]
+        ).map((title) => <Tag key={title}>{title}</Tag>)}
         <h4>图例</h4>
         {(
           ["已开放", "接近开放", "需要调查", "硬性受限", "新发现"] as Status[]

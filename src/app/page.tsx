@@ -34,6 +34,7 @@ import { events, profileCards, transferItems } from "@/data/mock";
 import type { ProductStep, ProfileMode, DecisionRecord } from "@/types/product";
 import type { ParsedProfile, ProfileCard } from "@/types/profile";
 import MissionSimulation from "@/components/scenario/MissionSimulation";
+import { useGameStore } from "@/store/game";
 
 const CareerNetwork = dynamic(
   () => import("@/components/career-map/CareerNetwork"),
@@ -521,8 +522,54 @@ function Parsing({ done }: { done: () => void }) {
   );
 }
 
-function Review({ next, cards, setCards }: { next: () => void; cards: ProfileCard[]; setCards: React.Dispatch<React.SetStateAction<ProfileCard[]>> }) {
+function Review({ next, cards, setCards, sourceName, usedAI }: { next: () => void; cards: ProfileCard[]; setCards: React.Dispatch<React.SetStateAction<ProfileCard[]>>; sourceName: string; usedAI: boolean }) {
   const groups: ProfileCard["type"][] = ["事实", "能力", "推断", "资格", "限制", "偏好"];
+  const [editor, setEditor] = useState<{
+    id?: string;
+    type: ProfileCard["type"];
+    title: string;
+    detail: string;
+    evidence: string;
+  } | null>(null);
+  const openNewCard = (type: ProfileCard["type"]) =>
+    setEditor({ type, title: "", detail: "", evidence: "" });
+  const openCardEditor = (card: ProfileCard) =>
+    setEditor({
+      id: card.id,
+      type: card.type,
+      title: card.title,
+      detail: card.detail,
+      evidence: card.evidence,
+    });
+  const saveCard = () => {
+    if (!editor || !editor.title.trim() || !editor.evidence.trim()) return;
+    setCards((current) => {
+      if (editor.id) {
+        return current.map((card) =>
+          card.id === editor.id
+            ? {
+                ...card,
+                title: editor.title.trim(),
+                detail: editor.detail.trim(),
+                evidence: editor.evidence.trim(),
+              }
+            : card,
+        );
+      }
+      return [
+        ...current,
+        {
+          id: `manual-${Date.now()}`,
+          type: editor.type,
+          title: editor.title.trim(),
+          detail: editor.detail.trim() || "由用户手动补充，建议在使用前继续核验具体内容。",
+          evidence: editor.evidence.trim(),
+          confirmed: true,
+        },
+      ];
+    });
+    setEditor(null);
+  };
   return (
     <main className="content-page review-page">
       <PageHeader
@@ -534,7 +581,7 @@ function Review({ next, cards, setCards }: { next: () => void; cards: ProfileCar
             <b>{cards.filter((c) => c.confirmed).length}</b>
             <span>
               /{cards.length}
-              <small>已确认</small>
+              <small>已确认 · {sourceName} · {usedAI ? "AI解析" : "规则解析"}</small>
             </span>
           </div>
         }
@@ -593,7 +640,7 @@ function Review({ next, cards, setCards }: { next: () => void; cards: ProfileCar
                             </>
                           )}
                         </button>
-                        <button>
+                        <button onClick={() => openCardEditor(c)}>
                           <PenLine />
                           编辑
                         </button>
@@ -603,10 +650,58 @@ function Review({ next, cards, setCards }: { next: () => void; cards: ProfileCar
                       </footer>
                     </article>
                   ))}
-                <button className="add-profile">
+                <button className="add-profile" onClick={() => openNewCard(g)}>
                   <Plus />
                   添加{g}
                 </button>
+                {editor?.type === g && (
+                  <article className="profile-editor-card">
+                    <div className="profile-editor-head">
+                      <div>
+                        <Tag tone="review">{editor.id ? "编辑证据" : `新增${g}`}</Tag>
+                        <b>{editor.id ? "修正这张档案卡" : "补充一条你掌握的真实证据"}</b>
+                      </div>
+                      <button type="button" aria-label="关闭编辑器" onClick={() => setEditor(null)}>
+                        ×
+                      </button>
+                    </div>
+                    <label>
+                      <span>标题</span>
+                      <input
+                        value={editor.title}
+                        maxLength={60}
+                        placeholder="例如：道路网络分析项目"
+                        onChange={(event) => setEditor({ ...editor, title: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>具体内容</span>
+                      <textarea
+                        value={editor.detail}
+                        maxLength={220}
+                        placeholder="你做了什么、使用了什么方法、产生了什么结果？"
+                        onChange={(event) => setEditor({ ...editor, detail: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>证据来源（必填）</span>
+                      <input
+                        value={editor.evidence}
+                        maxLength={100}
+                        placeholder="例如：课程项目报告、GitHub仓库、导师确认、实习证明"
+                        onChange={(event) => setEditor({ ...editor, evidence: event.target.value })}
+                      />
+                    </label>
+                    <footer>
+                      <small>手动添加的内容会直接标记为“已确认”，并保存在当前浏览器。</small>
+                      <Button variant="secondary" onClick={() => setEditor(null)}>取消</Button>
+                      <Button disabled={!editor.title.trim() || !editor.evidence.trim()} onClick={saveCard}>
+                        <Check />
+                        保存证据
+                      </Button>
+                    </footer>
+                  </article>
+                )}
               </div>
             </section>
           ))}
@@ -1169,6 +1264,7 @@ function StickyAction({
 }
 
 export default function HomePage() {
+  const setGameProfileCards = useGameStore((state) => state.setProfileCards);
   const [step, setStep] = useState<ProductStep>("home"),
     [records, setRecords] = useState<DecisionRecord[]>([]),
     [parsedProfile, setParsedProfile] = useState<ParsedProfile>({
@@ -1214,7 +1310,8 @@ export default function HomePage() {
   }, [records]);
   useEffect(() => {
     localStorage.setItem("if-life-path-profile-v1", JSON.stringify(parsedProfile));
-  }, [parsedProfile]);
+    setGameProfileCards(parsedProfile.cards.filter((card) => card.confirmed));
+  }, [parsedProfile, setGameProfileCards]);
   const go = (s: ProductStep) => {
     setStep(s);
     localStorage.setItem("if-life-path-current-step", s);
@@ -1266,7 +1363,7 @@ export default function HomePage() {
           <Onboarding submitProfile={submitProfile} preset={preset} />
         )}{" "}
         {step === "parsing" && <Parsing done={() => go("review")} />}{" "}
-        {step === "review" && <Review next={() => go("map")} cards={parsedProfile.cards} setCards={(cards) => setParsedProfile((profile) => ({ ...profile, cards: typeof cards === "function" ? cards(profile.cards) : cards }))} />}{" "}
+        {step === "review" && <Review next={() => go("map")} cards={parsedProfile.cards} sourceName={parsedProfile.sourceName} usedAI={parsedProfile.usedAI} setCards={(cards) => setParsedProfile((profile) => ({ ...profile, cards: typeof cards === "function" ? cards(profile.cards) : cards }))} />}{" "}
         {step === "map" && <CareerNetwork onEnter={() => go("simulation")} />}{" "}
         {step === "simulation" && (
           <MissionSimulation

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ProfileCard } from "@/types/profile";
 type Effect = {
   energy: number;
   time: number;
@@ -27,11 +28,13 @@ type State = {
   missionOutcomes: Record<string, MissionOutcome>;
   placeVisits: Record<string, number>;
   missionMemories: Record<string, string[]>;
+  profileCards: ProfileCard[];
   choose: (text: string, e: Effect) => void;
   startMission: (id: string) => void;
   collectEvidence: (id: string) => void;
   visitPlace: (id: string) => void;
   completeMission: (outcome: MissionOutcome) => void;
+  setProfileCards: (cards: ProfileCard[]) => void;
   reset: () => void;
 };
 const initial = {
@@ -47,6 +50,7 @@ const initial = {
   missionOutcomes: {},
   placeVisits: {},
   missionMemories: {},
+  profileCards: [],
 };
 export const useGameStore = create<State>()(
   persist(
@@ -98,6 +102,7 @@ export const useGameStore = create<State>()(
             },
           };
         }),
+      setProfileCards: (profileCards) => set({ profileCards }),
       reset: () => set(initial),
     }),
     { name: "if-life-path-state-v2" },
