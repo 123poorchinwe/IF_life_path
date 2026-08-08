@@ -15,6 +15,15 @@ export type MissionOutcome = {
   completedAt: string;
   evidence: string[];
 };
+export type NPCMemory = {
+  id: string;
+  npcId: string;
+  placeId: string;
+  summary: string;
+  playerLine?: string;
+  npcLine?: string;
+  createdAt: string;
+};
 type State = {
   round: number;
   energy: number;
@@ -29,12 +38,14 @@ type State = {
   placeVisits: Record<string, number>;
   missionMemories: Record<string, string[]>;
   profileCards: ProfileCard[];
+  npcMemories: Record<string, NPCMemory[]>;
   choose: (text: string, e: Effect) => void;
   startMission: (id: string) => void;
   collectEvidence: (id: string) => void;
   visitPlace: (id: string) => void;
   completeMission: (outcome: MissionOutcome) => void;
   setProfileCards: (cards: ProfileCard[]) => void;
+  rememberNPC: (memory: Omit<NPCMemory, "id" | "createdAt">) => void;
   reset: () => void;
 };
 const initial = {
@@ -51,6 +62,7 @@ const initial = {
   placeVisits: {},
   missionMemories: {},
   profileCards: [],
+  npcMemories: {},
 };
 export const useGameStore = create<State>()(
   persist(
@@ -103,6 +115,22 @@ export const useGameStore = create<State>()(
           };
         }),
       setProfileCards: (profileCards) => set({ profileCards }),
+      rememberNPC: (memory) =>
+        set((state) => {
+          const memoryMap = state.npcMemories || {};
+          const previous = memoryMap[memory.npcId] || [];
+          const next: NPCMemory = {
+            ...memory,
+            id: `${memory.npcId}-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+          };
+          return {
+            npcMemories: {
+              ...memoryMap,
+              [memory.npcId]: [...previous.slice(-11), next],
+            },
+          };
+        }),
       reset: () => set(initial),
     }),
     { name: "if-life-path-state-v2" },

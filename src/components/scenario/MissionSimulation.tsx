@@ -96,6 +96,7 @@ export default function MissionSimulation({
   const collectWorldEvidence = useGameStore((s) => s.collectEvidence);
   const completeWorldMission = useGameStore((s) => s.completeMission);
   const worldEvidence = useGameStore((s) => s.worldEvidence);
+  const rememberNPC = useGameStore((s) => s.rememberNPC);
   const [missionId, setMissionId] = useState(
     activeMissionId || missionDefinitions[0].id,
   );
@@ -161,7 +162,8 @@ export default function MissionSimulation({
     setProvider((current) => ({ ...current, status: "offline" }));
   };
   useEffect(() => {
-    void refreshProvider();
+    const timer = window.setTimeout(() => void refreshProvider(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
     const key = `if-narrative-${missionId}-${npcId}`;
@@ -177,8 +179,12 @@ export default function MissionSimulation({
               ? v.messages
               : [{ speaker: "npc", text: openingLine(npcId, missionId) }],
           );
-          setMemory(v.memory || "");
+          setMemory(
+            v.memory || useGameStore.getState().npcMemories[npcId]?.at(-1)?.summary || "",
+          );
         } catch {}
+      } else {
+        setMemory(useGameStore.getState().npcMemories[npcId]?.at(-1)?.summary || "");
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -244,14 +250,29 @@ export default function MissionSimulation({
         status: data.dialogue.mode === "ai" ? "online" : "degraded",
       }));
       setMessages((v) => [...v, { speaker: "npc", text: data.dialogue.line }]);
+      rememberNPC({
+        npcId,
+        placeId: missionId,
+        summary: data.dialogue.memorySummary || `玩家讨论了“${text.slice(0, 36)}”`,
+        playerLine: text,
+        npcLine: data.dialogue.line,
+      });
     } catch {
+      const fallback = "我现在不想把话说满。你如果要继续，我们先回到已经确认的事实。";
       setMessages((v) => [
         ...v,
         {
           speaker: "npc",
-          text: "我现在不想把话说满。你如果要继续，我们先回到已经确认的事实。",
+          text: fallback,
         },
       ]);
+      rememberNPC({
+        npcId,
+        placeId: missionId,
+        summary: `玩家讨论了“${text.slice(0, 36)}”，模型不可用时由本地角色规则继续。`,
+        playerLine: text,
+        npcLine: fallback,
+      });
     } finally {
       setLoading(false);
     }

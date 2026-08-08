@@ -23,30 +23,44 @@ export type WorldClue = {
   collected: boolean;
 };
 
+export type WorldNPC = {
+  id: string;
+  name: string;
+  role: string;
+  x: number;
+  y: number;
+  available: boolean;
+};
+
 type Props = {
   places: WorldPlace[];
   clues: WorldClue[];
+  npcs: WorldNPC[];
   onFocus: (id: string) => void;
   onEnter: (id: string) => void;
   onInspect: (id: string) => void;
+  onTalk: (id: string) => void;
   onHint: (text: string) => void;
 };
 
 type NearbyTarget =
   | { kind: "place"; item: WorldPlace; distance: number }
-  | { kind: "clue"; item: WorldClue; distance: number };
+  | { kind: "clue"; item: WorldClue; distance: number }
+  | { kind: "npc"; item: WorldNPC; distance: number };
 
 export default function PhaserCareerWorld({
   places,
   clues,
+  npcs,
   onFocus,
   onEnter,
   onInspect,
+  onTalk,
   onHint,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const callbacks = useRef({ onFocus, onEnter, onInspect, onHint });
-  callbacks.current = { onFocus, onEnter, onInspect, onHint };
+  const callbacks = useRef({ onFocus, onEnter, onInspect, onTalk, onHint });
+  callbacks.current = { onFocus, onEnter, onInspect, onTalk, onHint };
 
   useEffect(() => {
     if (!host.current) return;
@@ -169,6 +183,30 @@ export default function PhaserCareerWorld({
             });
           });
 
+          npcs.filter((npc) => npc.available).forEach((worldNPC, index) => {
+            const x = (worldNPC.x / 100) * worldWidth;
+            const y = (worldNPC.y / 100) * worldHeight;
+            const npc = this.physics.add
+              .sprite(x, y, index % 2 ? "npc-gold" : "npc-blue")
+              .setDepth(21)
+              .setInteractive({ useHandCursor: true });
+            npc.setData("worldNPC", worldNPC);
+            npc.on("pointerdown", () => {
+              this.physics.moveTo(this.player, x, y + 38, 210);
+              callbacks.current.onHint(`靠近 ${worldNPC.name} 后按 E 交谈`);
+            });
+            this.add
+              .text(x, y - 34, `${worldNPC.name} · ${worldNPC.role}`, {
+                fontFamily: "sans-serif",
+                fontSize: "12px",
+                color: "#fff1ba",
+                backgroundColor: "#101a16dd",
+                padding: { x: 5, y: 3 },
+              })
+              .setOrigin(0.5)
+              .setDepth(23);
+          });
+
           places.forEach((place) => {
             const x = (place.x / 100) * worldWidth;
             const y = (place.y / 100) * worldHeight;
@@ -251,6 +289,10 @@ export default function PhaserCareerWorld({
               callbacks.current.onInspect(this.nearby.item.id);
               return;
             }
+            if (this.nearby.kind === "npc") {
+              callbacks.current.onTalk(this.nearby.item.id);
+              return;
+            }
             if (this.nearby.item.locked) {
               callbacks.current.onHint("当前无法进入：查看地点面板了解原因");
               return;
@@ -305,12 +347,26 @@ export default function PhaserCareerWorld({
                   (item.y / 100) * worldHeight,
                 ),
               })),
+            ...npcs
+              .filter((item) => item.available)
+              .map((item) => ({
+                kind: "npc" as const,
+                item,
+                distance: Phaser.Math.Distance.Between(
+                  this.player.x,
+                  this.player.y,
+                  (item.x / 100) * worldWidth,
+                  (item.y / 100) * worldHeight,
+                ),
+              })),
           ];
           targets.sort((a, b) => a.distance - b.distance);
           this.nearby = targets[0]?.distance < 115 ? targets[0] : null;
           const hint = this.nearby
             ? this.nearby.kind === "clue"
               ? `按 E 调查：${this.nearby.item.title}`
+              : this.nearby.kind === "npc"
+                ? `按 E 与 ${this.nearby.item.name} 交谈`
               : `按 E 进入：${this.nearby.item.building}`
             : "WASD / 方向键移动 · 靠近人物、地点或线索互动";
           if (hint !== this.lastHint) {
@@ -340,7 +396,7 @@ export default function PhaserCareerWorld({
       cancelled = true;
       game?.destroy(true);
     };
-  }, [clues, places]);
+  }, [clues, npcs, places]);
 
   return (
     <div

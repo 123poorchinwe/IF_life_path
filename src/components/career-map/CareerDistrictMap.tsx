@@ -15,10 +15,12 @@ import {
 import { Button, Tag } from "@/components/ui";
 import PhaserCareerWorld, {
   WorldClue,
+  WorldNPC,
   WorldPlace,
 } from "./PhaserCareerWorld";
 import { useGameStore } from "@/store/game";
 import { getDialogueEndpoint } from "@/ai/dialogue-endpoint";
+import { createMissionState, createRelationship } from "@/data/missions";
 
 const districts = [
   {
@@ -31,7 +33,8 @@ const districts = [
     building: "空间数据实验室",
     path: "gis-dev",
     npc: "周老师",
-    npcId: "mentor",
+    npcId: "director_zhou",
+    dialogueMissionId: "scope_and_credit",
     role: "项目负责人",
     availableRounds: [1, 2, 4, 5],
     awayMessage: "周老师正在参加项目评审，傍晚后才会回复。",
@@ -46,7 +49,8 @@ const districts = [
     building: "城市科技公司",
     path: "urban",
     npc: "高原",
-    npcId: "interviewer",
+    npcId: "advisor_xu",
+    dialogueMissionId: "training_contract",
     role: "空间技术负责人",
     availableRounds: [2, 3, 5, 6],
     awayMessage: "高原正在客户现场，开放日接待尚未开始。",
@@ -61,7 +65,8 @@ const districts = [
     building: "资格档案馆",
     path: "natural",
     npc: "乔文",
-    npcId: "engineer",
+    npcId: "engineer_qiao",
+    dialogueMissionId: "career_interview",
     role: "国企项目工程师",
     availableRounds: [1, 2, 3, 4, 5, 6],
     awayMessage: "档案馆今天暂停接待。",
@@ -76,7 +81,8 @@ const districts = [
     building: "从业者咖啡馆",
     path: "institute",
     npc: "林珊",
-    npcId: "senior",
+    npcId: "alumna_lin",
+    dialogueMissionId: "career_interview",
     role: "GIS 企业校友",
     availableRounds: [1, 3, 4, 6],
     awayMessage: "林珊正在远程会议中，暂时不能进行完整访谈。",
@@ -91,7 +97,8 @@ const districts = [
     building: "能力迁移工坊",
     path: "supply",
     npc: "唐宁",
-    npcId: "pm",
+    npcId: "manager_tang",
+    dialogueMissionId: "career_interview",
     role: "城市数据产品经理",
     availableRounds: [3, 4, 5, 6],
     awayMessage: "能力迁移工作坊尚未开放。",
@@ -149,13 +156,21 @@ function Interior({
   district: District;
   close: () => void;
 }) {
+  const profileCards = useGameStore((state) => state.profileCards || []);
+  const npcMemories = useGameStore((state) => (state.npcMemories || {})[district.npcId] || []);
+  const rememberNPC = useGameStore((state) => state.rememberNPC);
+  const [missionState, setMissionState] = useState(() => createMissionState(district.dialogueMissionId));
+  const [relationship, setRelationship] = useState(() => createRelationship(district.npcId));
+  const previousMemory = npcMemories.at(-1)?.summary || "";
   const [input, setInput] = useState(""),
     [messages, setMessages] = useState<
       { who: "npc" | "player"; text: string }[]
     >([
       {
         who: "npc",
-        text: `你来了。这里是${district.building}。比起问“这份职业好不好”，你今天更想核验哪一件具体的事？`,
+        text: previousMemory
+          ? `我记得我们上次谈到：${previousMemory}。这次你想继续核验什么？`
+          : `你来了。这里是${district.building}。比起问“这份职业好不好”，你今天更想核验哪一件具体的事？`,
       },
     ]),
     [loading, setLoading] = useState(false),
@@ -173,25 +188,49 @@ function Interior({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           npcId: district.npcId,
-          place: district.building,
+          missionId: district.dialogueMissionId,
           message: text,
-          memory: messages.slice(-6).map((m) => `${m.who}:${m.text}`),
-          profile: { major: "GIS", degree: "硕士", graduation: "2027" },
-          worldState: { energy: 7, information_quality: 2, turn: 2 },
+          missionState,
+          relationship,
+          history: messages.slice(-12).map((message) => ({
+            speaker: message.who === "player" ? "player" : "npc",
+            text: message.text,
+          })),
+          memorySummary: [
+            previousMemory,
+            ...profileCards.filter((card) => card.confirmed).slice(0, 6).map((card) => `${card.type}:${card.title}`),
+          ].filter(Boolean).join("；"),
         }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error();
-      setMessages((m) => [...m, { who: "npc", text: j.data.npc_message }]);
+      if (!r.ok || !j.dialogue?.line) throw new Error();
+      setMissionState(j.nextMissionState);
+      setRelationship(j.nextRelationship);
+      setMessages((m) => [...m, { who: "npc", text: j.dialogue.line }]);
+      rememberNPC({
+        npcId: district.npcId,
+        placeId: district.id,
+        summary: j.dialogue.memorySummary || `玩家询问了“${text.slice(0, 36)}”`,
+        playerLine: text,
+        npcLine: j.dialogue.line,
+      });
       setMode("AI 在线");
     } catch {
+      const fallback = "我只能先说我亲眼见过的部分。岗位名字经常比实际工作漂亮，你可以问我上个月真正交付了什么。";
       setMessages((m) => [
         ...m,
         {
           who: "npc",
-          text: "我只能先说我亲眼见过的部分。岗位名字经常比实际工作漂亮，你可以问我上个月真正交付了什么。",
+          text: fallback,
         },
       ]);
+      rememberNPC({
+        npcId: district.npcId,
+        placeId: district.id,
+        summary: `玩家询问了“${text.slice(0, 36)}”，对话由本地角色规则接管。`,
+        playerLine: text,
+        npcLine: fallback,
+      });
       setMode("本地角色回退");
     } finally {
       setLoading(false);
@@ -366,6 +405,18 @@ export default function CareerDistrictMap({
       })),
     [worldEvidence],
   );
+  const worldNPCs: WorldNPC[] = useMemo(
+    () =>
+      districts.map((district, index) => ({
+        id: district.npcId,
+        name: district.npc,
+        role: district.role,
+        x: Math.min(94, district.x + (index % 2 ? -5 : 6)),
+        y: Math.min(92, district.y + 9),
+        available: availableDistrictIds.has(district.id),
+      })),
+    [availableDistrictIds],
+  );
   const selectedOutcome = selected.missionId
     ? outcomes[selected.missionId]
     : undefined;
@@ -395,6 +446,7 @@ export default function CareerDistrictMap({
       <PhaserCareerWorld
         places={worldPlaces}
         clues={worldClues}
+        npcs={worldNPCs}
         onHint={setManualTip}
         onFocus={(id) => {
           const d = districts.find((x) => x.id === id);
@@ -413,6 +465,14 @@ export default function CareerDistrictMap({
           collectEvidence(id);
           setDiscovery(`${clue.title}：${clue.description}`);
           setManualTip(`证据已归档：${clue.title}`);
+        }}
+        onTalk={(npcId) => {
+          const district = districts.find((item) => item.npcId === npcId);
+          if (!district) return;
+          setSelected(district);
+          onSelect(district.path);
+          visitPlace(district.id);
+          setInside(district);
         }}
       />
       {discovery && (

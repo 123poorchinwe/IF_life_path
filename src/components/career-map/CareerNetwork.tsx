@@ -29,6 +29,7 @@ import { careers, Status } from "@/data/mock";
 import { Button, Tag } from "@/components/ui";
 import CareerDistrictMap from "./CareerDistrictMap";
 import { useGameStore } from "@/store/game";
+import { evaluateCareerEvidence } from "@/engine/career-evidence-engine";
 
 type CareerData = {
   label: string;
@@ -94,7 +95,10 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
   const missionOutcomes = useGameStore((s) => s.missionOutcomes);
   const worldEvidence = useGameStore((s) => s.worldEvidence);
   const profileCards = useGameStore((s) => s.profileCards || []);
-  const confirmedCards = profileCards.filter((card) => card.confirmed);
+  const confirmedCards = useMemo(
+    () => profileCards.filter((card) => card.confirmed),
+    [profileCards],
+  );
   const abilityCards = confirmedCards.filter((card) => card.type === "能力");
   const constraintCards = confirmedCards.filter((card) => card.type === "限制");
   const completedMissionCount = Object.keys(missionOutcomes).length;
@@ -104,6 +108,7 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
     [view, setView] = useState<"district" | "network">("district");
   const { fitView } = useReactFlow();
   const selectedBase = careers.find((c) => c.id === selectedId) || careers[0];
+  const selectedEvidence = evaluateCareerEvidence(selectedBase, confirmedCards);
   const relevantOutcome = ["gis-dev", "institute", "phd"].includes(
     selectedBase.id,
   )
@@ -123,6 +128,14 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
           ],
         }
       : selectedBase;
+  const selectedWithEvidence = {
+    ...selected,
+    status: relevantOutcome ? selected.status : selectedEvidence.status,
+    gaps: selectedEvidence.gaps,
+    evidence: selectedEvidence.matchedCards.map(
+      (card) => `${card.title} · ${card.evidence}`,
+    ),
+  };
   const { nodes, edges } = useMemo(() => {
     const visible = careers
       .filter(
@@ -191,8 +204,8 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
         data: {
           label: c.title,
           sector: String(c.sector),
-          status: c.status,
-          gaps: c.status === "已开放" ? 0 : (i % 2) + 1,
+          status: evaluateCareerEvidence(c, confirmedCards).status,
+          gaps: evaluateCareerEvidence(c, confirmedCards).gaps.length,
           confidence: String(c.confidence),
           kind: "career" as const,
         },
@@ -238,7 +251,7 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
       })),
     ];
     return { nodes: ns, edges: es };
-  }, [sector, excluded, confirmedCards.length]);
+  }, [sector, excluded, confirmedCards]);
   return (
     <div className="network-shell">
       <aside className="network-profile">
@@ -367,9 +380,9 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
           <X />
         </button>
         <div className="inspector-overline">CAREER INSPECTOR</div>
-        <Tag tone={statusKey[selected.status]}>
-          {statusIcon[selected.status]}
-          {selected.status}
+        <Tag tone={statusKey[selectedWithEvidence.status]}>
+          {statusIcon[selectedWithEvidence.status]}
+          {selectedWithEvidence.status}
         </Tag>
         <h2>{selected.title}</h2>
         <p className="definition">{selected.description}</p>
@@ -390,7 +403,7 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
             <Target />
             <span>
               <b>可补足</b>
-              {selected.gaps.join("、")}
+              {selectedWithEvidence.gaps.join("、") || "暂无明确可补缺口"}
             </span>
           </li>
           <li className="review">
@@ -401,9 +414,14 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
           </li>
         </ul>
         <h3>为什么向你出现</h3>
-        <blockquote>
-          你的道路网络项目证明了网络分析、Python 和空间可视化能力。
-        </blockquote>
+        <blockquote>{selectedEvidence.explanation}</blockquote>
+        {selectedEvidence.matchedCards.length > 0 && (
+          <div className="career-evidence-links">
+            {selectedEvidence.matchedCards.slice(0, 4).map((card) => (
+              <Tag key={card.id}>{card.title} · {card.evidence}</Tag>
+            ))}
+          </div>
+        )}
         <div className="source-note">
           <Clock3 />
           <span>
