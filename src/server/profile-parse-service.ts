@@ -99,25 +99,61 @@ function extractJson(raw: string) {
 
 async function generateCards(text: string): Promise<ProfileCard[] | null> {
   const provider = getDialogueProviderConfig();
-  if (!provider.token || (process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE) === "true") return null;
+  if (!provider.enabled || (process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE) === "true") return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 18_000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    provider.provider === "ollama" ? 45_000 : 18_000,
+  );
   try {
-    const response = await fetch(`${provider.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const base = provider.baseUrl.replace(/\/$/, "");
+    const ollama = provider.provider === "ollama";
+    const endpoint = ollama
+      ? `${base.replace(/\/v1$/, "")}/api/chat`
+      : `${base}/chat/completions`;
+    const messages = [
+      { role: "system", content: "你是职业档案解析器。只提取材料支持的内容，事实与推断必须区分。资格不能猜测，缺失信息不能写成负面事实。只输出JSON。" },
+      { role: "user", content: `请将以下材料解析为3到14张卡。类型只能是：事实、能力、推断、资格、限制、偏好。每张卡必须包含type、title、detail、evidence、confirmed五个字段；confirmed必须是布尔值。明确提供的事实、实际使用过的能力和明确资格可为true；推断和偏好为false。缺少实习、作品、技能或经济缓冲等内容必须归入“限制”，不能包装成普通事实。evidence必须引用或概括原文依据。输出JSON对象，唯一顶层字段为cards。\n\n材料：\n${text.slice(0, 12000)}` },
+    ];
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.token}` },
+      headers: {
+        "Content-Type": "application/json",
+        ...(provider.token ? { Authorization: `Bearer ${provider.token}` } : {}),
+      },
       signal: controller.signal,
-      body: JSON.stringify({ model: provider.model, temperature: 0.15, messages: [
-        { role: "system", content: "你是职业档案解析器。只提取材料支持的内容，事实与推断必须区分。资格不能猜测，缺失信息不能写成负面事实。只输出JSON。" },
-        { role: "user", content: `请将以下材料解析为3到14张卡。类型只能是：事实、能力、推断、资格、限制、偏好。输出JSON对象，字段为cards。\n\n材料：\n${text.slice(0, 12000)}` },
-      ] }),
+      body: JSON.stringify(
+        ollama
+          ? {
+              model: provider.model,
+              messages,
+              stream: false,
+              think: false,
+              format: "json",
+              options: { temperature: 0.15, num_predict: 1600 },
+            }
+          : {
+              model: provider.model,
+              temperature: 0.15,
+              messages,
+            },
+      ),
     });
     if (!response.ok) return null;
     const payload = await response.json();
-    const raw = payload.choices?.[0]?.message?.content;
+    const raw = ollama
+      ? payload.message?.content
+      : payload.choices?.[0]?.message?.content;
     if (typeof raw !== "string") return null;
     return aiSchema.parse(extractJson(raw)).cards.map((card, index) => ({ ...card, id: `profile-${index + 1}` }));
-  } catch { return null; } finally { clearTimeout(timeout); }
+  } catch (error) {
+    console.warn(
+      "Profile AI parse fallback",
+      provider.provider,
+      error instanceof Error ? error.message : "unknown_error",
+    );
+    return null;
+  } finally { clearTimeout(timeout); }
 }
 
 export async function parseProfileRequest(req: Request) {

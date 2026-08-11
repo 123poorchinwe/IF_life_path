@@ -16,7 +16,7 @@ const requestSchema = z.object({
 
 export function dialogueHealth() {
   const provider = getDialogueProviderConfig();
-  return { configured: Boolean(provider.token), mock: (process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE) === "true", provider: provider.provider, model: provider.model, ...getDialogueProviderHealth() };
+  return { configured: provider.enabled, mock: (process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE) === "true", provider: provider.provider, model: provider.model, ...getDialogueProviderHealth() };
 }
 
 export async function processDialogueRequest(req: Request) {

@@ -102,6 +102,17 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
   const abilityCards = confirmedCards.filter((card) => card.type === "能力");
   const constraintCards = confirmedCards.filter((card) => card.type === "限制");
   const completedMissionCount = Object.keys(missionOutcomes).length;
+  const worldEvidenceLabels: Record<string, string> = {
+    original_message: "原始任务消息",
+    meeting_minutes: "会议纪要",
+    draft_commit: "代码提交记录",
+    contract_copy: "合同副本",
+    sales_recording: "顾问口头录音",
+    student_contact: "往届学员反馈",
+    task_sample: "真实任务样本",
+    second_source: "第二来源",
+    job_posting: "正式岗位说明",
+  };
   const [selectedId, setSelectedId] = useState("gis-dev"),
     [sector, setSector] = useState("全部"),
     [excluded, setExcluded] = useState(false),
@@ -132,9 +143,14 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
     ...selected,
     status: relevantOutcome ? selected.status : selectedEvidence.status,
     gaps: selectedEvidence.gaps,
-    evidence: selectedEvidence.matchedCards.map(
-      (card) => `${card.title} · ${card.evidence}`,
-    ),
+    evidence: [
+      ...selectedEvidence.matchedCards.map(
+        (card) => `${card.title} · ${card.evidence}`,
+      ),
+      ...worldEvidence.map(
+        (id) => `情景调查 · ${worldEvidenceLabels[id] || id}`,
+      ),
+    ],
   };
   const { nodes, edges } = useMemo(() => {
     const visible = careers
@@ -422,12 +438,19 @@ function NetworkInner({ onEnter }: { onEnter: (missionId?: string) => void }) {
             ))}
           </div>
         )}
+        {worldEvidence.length > 0 && (
+          <div className="career-evidence-links" aria-label="已获得的情景证据">
+            {worldEvidence.map((id) => (
+              <Tag key={id}>情景调查 · {worldEvidenceLabels[id] || id}</Tag>
+            ))}
+          </div>
+        )}
         <div className="source-note">
           <Clock3 />
           <span>
             <b>现实证据</b>
-            {completedMissionCount
-              ? `已完成 ${completedMissionCount} 次调查 · 形成 ${worldEvidence.length} 项证据`
+            {worldEvidence.length
+              ? `已形成 ${worldEvidence.length} 项情景证据${completedMissionCount ? ` · 完成 ${completedMissionCount} 次调查` : " · 尚未形成任务结论"}`
               : "当前使用示例岗位分类 · 数据待正式核验"}
           </span>
         </div>

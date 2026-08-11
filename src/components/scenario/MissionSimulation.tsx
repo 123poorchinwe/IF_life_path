@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bot,
   ChevronRight,
@@ -43,6 +43,13 @@ type ApiResult = {
     endingId?: string;
   };
   validationFailures: string[];
+  generation: {
+    mode: "ai" | "mock" | "fallback";
+    provider: string;
+    model: string;
+    latencyMs: number;
+    generatedAt: string;
+  };
 };
 
 function withWorldEvidence(
@@ -85,6 +92,11 @@ const openingLine = (npcId: string, missionId: string) =>
       : npcId === "alumna_lin"
         ? "坐吧。你可以不问那些标准答案，直接告诉我你对这份工作最拿不准的地方。"
         : "你想核验岗位的哪一部分？最好说一个具体场景。";
+const laboratoryRoutine = [
+  { x: 70, y: 49, activity: "在白板前核对交付清单" },
+  { x: 54, y: 66, activity: "低头翻看桌上的会议纪要" },
+  { x: 31, y: 48, activity: "回到电脑前检查数据" },
+] as const;
 export default function MissionSimulation({
   next,
   backToMap,
@@ -123,10 +135,16 @@ export default function MissionSimulation({
     },
   ]);
   const [memory, setMemory] = useState("");
+  const loadedStorageKey = useRef<string | null>(null);
+  const dialogueInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [last, setLast] = useState<ApiResult | null>(null);
   const [debug, setDebug] = useState(false);
+  const [playerPosition, setPlayerPosition] = useState({ x: 18, y: 72 });
+  const [npcRoutineIndex, setNpcRoutineIndex] = useState(0);
+  const [npcEngaged, setNpcEngaged] = useState(false);
+  const [worldNotice, setWorldNotice] = useState("用方向键或 WASD 走近人物和物品");
   const [provider, setProvider] = useState<ProviderStatus>({
     configured: false,
     mock: false,
@@ -166,7 +184,37 @@ export default function MissionSimulation({
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
+    if (npcEngaged || loading) return;
+    const timer = window.setInterval(
+      () => setNpcRoutineIndex((index) => (index + 1) % laboratoryRoutine.length),
+      6500,
+    );
+    return () => window.clearInterval(timer);
+  }, [npcEngaged, loading]);
+  useEffect(() => {
+    const move = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select")) return;
+      const direction: Record<string, [number, number]> = {
+        ArrowLeft: [-3, 0], a: [-3, 0], A: [-3, 0],
+        ArrowRight: [3, 0], d: [3, 0], D: [3, 0],
+        ArrowUp: [0, -4], w: [0, -4], W: [0, -4],
+        ArrowDown: [0, 4], s: [0, 4], S: [0, 4],
+      };
+      const delta = direction[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      setPlayerPosition((position) => ({
+        x: Math.max(5, Math.min(92, position.x + delta[0])),
+        y: Math.max(23, Math.min(86, position.y + delta[1])),
+      }));
+    };
+    window.addEventListener("keydown", move);
+    return () => window.removeEventListener("keydown", move);
+  }, []);
+  useEffect(() => {
     const key = `if-narrative-${missionId}-${npcId}`;
+    loadedStorageKey.current = null;
     const timer = window.setTimeout(() => {
       const saved = localStorage.getItem(key);
       if (saved) {
@@ -186,13 +234,18 @@ export default function MissionSimulation({
       } else {
         setMemory(useGameStore.getState().npcMemories[npcId]?.at(-1)?.summary || "");
       }
+      loadedStorageKey.current = key;
     }, 0);
     return () => window.clearTimeout(timer);
   }, [missionId, npcId, worldEvidence]);
   useEffect(() => {
+    const storageKey = `if-narrative-${missionId}-${npcId}`;
+    if (loadedStorageKey.current !== storageKey) return;
     localStorage.setItem(
-      `if-narrative-${missionId}-${npcId}`,
+      storageKey,
       JSON.stringify({
+        version: 2,
+        savedAt: new Date().toISOString(),
         state,
         relationship,
         messages: messages.slice(-30),
@@ -304,6 +357,21 @@ export default function MissionSimulation({
       playerEvidence: [...s.playerEvidence, evidenceId],
     }));
     collectWorldEvidence(evidenceId);
+    const item = mission.evidenceItems.find((evidence) => evidence.id === evidenceId);
+    setWorldNotice(item ? `你发现了：${item.title}` : "获得了一条新证据");
+  };
+  const npcRoutine = laboratoryRoutine[npcRoutineIndex];
+  const isNearNPC =
+    Math.abs(playerPosition.x - npcRoutine.x) < 10 &&
+    Math.abs(playerPosition.y - npcRoutine.y) < 14;
+  const approachNPC = () => {
+    setPlayerPosition({ x: npcRoutine.x - 5, y: npcRoutine.y + 5 });
+    setNpcEngaged(true);
+    setWorldNotice(`${npc.name}注意到了你。现在可以直接和她说话。`);
+    window.requestAnimationFrame(() => {
+      dialogueInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      dialogueInputRef.current?.focus({ preventScroll: true });
+    });
   };
   useEffect(() => {
     if (!ending) return;
@@ -319,8 +387,8 @@ export default function MissionSimulation({
     <main className="mission-sim">
       <header className="mission-top">
         <div>
-          <span>04 / 有边界生成式叙事</span>
-          <h1>{mission.title}</h1>
+          <span>第 1 日 / 18:40 / 实验室</span>
+          <h1>实验室 · {mission.title}</h1>
           <p>{mission.immutablePremise}</p>
         </div>
         <div className="mission-picker">
@@ -335,6 +403,75 @@ export default function MissionSimulation({
           ))}
         </div>
       </header>
+      <section className="laboratory-world" aria-label="可探索的实验室">
+        <div className="lab-wall">
+          <div className="lab-window"><i /><i /><i /></div>
+          <div className="lab-clock">18:40</div>
+          <div className="lab-board">
+            <b>本周交付</b>
+            <span>数据清洗 ✓</span>
+            <span>模型分析 ?</span>
+          </div>
+        </div>
+        <div className="lab-floor" />
+        <button
+          type="button"
+          className={`lab-object lab-computer ${state.playerEvidence.includes(mission.evidenceItems[0]?.id) ? "collected" : ""}`}
+          onClick={() => {
+            setPlayerPosition({ x: 26, y: 43 });
+            investigate(mission.evidenceItems[0]?.id);
+          }}
+          aria-label="调查电脑中的原始任务消息"
+        ><span>调查电脑</span></button>
+        <button
+          type="button"
+          className={`lab-object lab-desk ${state.playerEvidence.includes(mission.evidenceItems[1]?.id) ? "collected" : ""}`}
+          onClick={() => {
+            setPlayerPosition({ x: 48, y: 70 });
+            investigate(mission.evidenceItems[1]?.id);
+          }}
+          aria-label="调查桌上的会议纪要"
+        ><span>查看纪要</span></button>
+        <button
+          type="button"
+          className={`lab-object lab-files ${state.playerEvidence.includes(mission.evidenceItems[2]?.id) ? "collected" : ""}`}
+          onClick={() => {
+            setPlayerPosition({ x: 84, y: 68 });
+            investigate(mission.evidenceItems[2]?.id);
+          }}
+          aria-label="调查代码提交记录"
+        ><span>翻阅记录</span></button>
+        <button
+          type="button"
+          className={`pixel-npc ${isNearNPC ? "near" : ""}`}
+          style={{ left: `${npcRoutine.x}%`, top: `${npcRoutine.y}%` }}
+          onClick={approachNPC}
+          aria-label={`走近${npc.name}`}
+        >
+          <i className="pixel-head" /><i className="pixel-body" />
+          <span>
+            {npc.name}
+            <small>
+              {loading
+                ? "正在思考…"
+                : isNearNPC
+                  ? "她抬头看向你 · 点击交谈"
+                  : npcRoutine.activity}
+            </small>
+          </span>
+        </button>
+        <div
+          className="pixel-player"
+          style={{ left: `${playerPosition.x}%`, top: `${playerPosition.y}%` }}
+          aria-label="玩家角色"
+        ><i className="pixel-head" /><i className="pixel-body" /></div>
+        <div className="world-hud">
+          <span><b>实验室 · 傍晚</b>{worldNotice}</span>
+          <span className="world-controls">
+            {isNearNPC ? `${npc.name}注意到了你 · 点击她开始交谈` : "WASD / 方向键移动 · 点击物品互动"}
+          </span>
+        </div>
+      </section>
       <div className="mission-grid">
         <aside className="mission-brief">
           <Tag tone="review">
@@ -495,22 +632,36 @@ export default function MissionSimulation({
             </div>
           )}
           {last && (
-            <div className="turn-consequence">
-              <span>
-                <b>系统识别</b>
-                {last.intent.type}
-              </span>
-              <span>
-                <b>NPC策略</b>
-                {last.decision.responseStrategy}
-              </span>
-              <span>
-                <b>规则结果</b>
-                {last.transition.blockedReasons[0] ||
-                last.transition.newEvidence.length
-                  ? `新增证据 ${last.transition.newEvidence.join("、") || "—"}`
-                  : "任务状态已更新"}
-              </span>
+            <div>
+              <div className="ai-generation-proof" role="status">
+                <Bot size={15} />
+                <strong>
+                  {last.generation.mode === "ai"
+                    ? "本条由本地 Ollama 实时生成"
+                    : "本条使用了本地安全回退"}
+                </strong>
+                <span>
+                  {last.generation.provider} · {last.generation.model} ·{" "}
+                  {(last.generation.latencyMs / 1000).toFixed(1)} 秒
+                </span>
+              </div>
+              <div className="turn-consequence">
+                <span>
+                  <b>系统识别</b>
+                  {last.intent.type}
+                </span>
+                <span>
+                  <b>NPC策略</b>
+                  {last.decision.responseStrategy}
+                </span>
+                <span>
+                  <b>规则结果</b>
+                  {last.transition.blockedReasons[0] ||
+                  last.transition.newEvidence.length
+                    ? `新增证据 ${last.transition.newEvidence.join("、") || "—"}`
+                    : "任务状态已更新"}
+                </span>
+              </div>
             </div>
           )}
           <div className="prompt-hints">
@@ -529,6 +680,7 @@ export default function MissionSimulation({
             }}
           >
             <textarea
+              ref={dialogueInputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={`对${npc.name}说任何话；可以追问、核验、谈判、拒绝、留证或离开……`}

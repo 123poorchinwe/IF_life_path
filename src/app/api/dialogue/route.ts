@@ -80,7 +80,7 @@ export async function GET(req: Request) {
   const provider = getDialogueProviderConfig();
   return NextResponse.json(
     {
-      configured: Boolean(provider.token),
+      configured: provider.enabled,
       mock:
         (process.env.AI_MOCK_MODE1 || process.env.AI_MOCK_MODE) === "true",
       provider: provider.provider,
@@ -128,8 +128,9 @@ export async function POST(req: Request) {
         body.relationship,
         intent,
         decision,
-      ),
-      generated = await generateNPCDialogue({
+      );
+    const generationStartedAt = Date.now();
+    const generated = await generateNPCDialogue({
         npc,
         mission,
         state: body.missionState,
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
         history: body.history,
         memorySummary: body.memorySummary,
       });
+    const provider = getDialogueProviderConfig();
     return NextResponse.json(
       {
         intent,
@@ -155,6 +157,13 @@ export async function POST(req: Request) {
           transition.relationshipDelta,
         ),
         validationFailures: generated.validationFailures,
+        generation: {
+          mode: generated.response.mode,
+          provider: provider.provider,
+          model: provider.model,
+          latencyMs: Date.now() - generationStartedAt,
+          generatedAt: new Date().toISOString(),
+        },
       },
       { headers },
     );
